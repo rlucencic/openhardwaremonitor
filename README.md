@@ -24,7 +24,7 @@ Tested on an ASUS Zenbook A14 (Snapdragon X Elite X1E-78-100), both as a native 
 Not there yet:
 
 - **CPU and GPU temperatures** aren't labelled: the firmware's thermal zones have no names saying what they measure, so they show under the mainboard as TZ0, TZ1...
-- **GPU clock and temperature**: the Adreno driver doesn't report them to Windows.
+- **GPU clock and temperature** aren't read. Windows' GPU performance query (D3DKMT) may have them, but it couldn't be tried on a working Adreno here.
 - **The GPU readings haven't been seen on a working Adreno**: the test laptop's GPU driver wasn't loading. Microsoft's software adapters (Basic Render Driver) are left out.
 
 ## Other changes
