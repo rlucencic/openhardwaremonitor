@@ -20,11 +20,42 @@ namespace OpenHardwareMonitor.Hardware {
       IsUnix = (p == 4) || (p == 6) || (p == 128);
 
       Is64BitOperatingSystem = GetIs64BitOperatingSystem();
+      IsArm64 = !IsUnix && GetIsArm64();
     }
 
     public static bool IsUnix { get; }
 
     public static bool Is64BitOperatingSystem { get; }
+
+    /// <summary>
+    /// Windows on ARM64, whatever the process runs as (native ARM64 or x64
+    /// emulated). There, the x86 kernel driver can't load and the x86 CPUID
+    /// code can't run, so hardware is read through Windows' own interfaces.
+    /// </summary>
+    public static bool IsArm64 { get; }
+
+    private const ushort IMAGE_FILE_MACHINE_ARM64 = 0xAA64;
+
+    private static bool GetIsArm64() {
+      try {
+        // IsWow64Process2 reports the native machine even to an x64 process
+        // emulated on ARM64, where RuntimeInformation may say X64.
+        ushort processMachine, nativeMachine;
+        if (IsWow64Process2(Process.GetCurrentProcess().Handle,
+          out processMachine, out nativeMachine))
+          return nativeMachine == IMAGE_FILE_MACHINE_ARM64;
+      } catch (EntryPointNotFoundException) { }
+      return RuntimeInformation.OSArchitecture == Architecture.Arm64;
+    }
+
+    public static string ProcessArchitectureName {
+      get { return RuntimeInformation.ProcessArchitecture.ToString(); }
+    }
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsWow64Process2(IntPtr hProcess,
+      out ushort processMachine, out ushort nativeMachine);
 
     private static bool GetIs64BitOperatingSystem() {
       if (IntPtr.Size == 8)

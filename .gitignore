@@ -2,4 +2,5 @@
 *.suo
 Bin/
 Obj/
-.vs/
+.vs/bin/
+obj/

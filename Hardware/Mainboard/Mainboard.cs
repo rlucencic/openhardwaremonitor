@@ -9,6 +9,7 @@
 */
 
 using System;
+using System.Collections.Generic;
 using System.Text;
 using OpenHardwareMonitor.Hardware.LPC;
 
@@ -58,10 +59,26 @@ namespace OpenHardwareMonitor.Hardware.Mainboard {
         superIO = lpcio.SuperIO;
       }
       
-      superIOHardware = new Hardware[superIO.Length];
+      List<Hardware> subHardware = new List<Hardware>();
       for (int i = 0; i < superIO.Length; i++)
-        superIOHardware[i] = new SuperIOHardware(this, superIO[i],
-          manufacturer, model, settings);
+        subHardware.Add(new SuperIOHardware(this, superIO[i],
+          manufacturer, model, settings));
+
+      // Without a Super I/O chip (laptops, and always on ARM64), Windows'
+      // ACPI thermal zones are the mainboard's temperatures.
+      if (superIO.Length == 0 && !OperatingSystem.IsUnix) {
+        ThermalZones thermalZones = ThermalZones.Create(this, settings);
+        if (thermalZones != null)
+          subHardware.Add(thermalZones);
+      }
+
+      if (OperatingSystem.IsArm64) {
+        EnergyMeters energyMeters = EnergyMeters.Create(this, settings);
+        if (energyMeters != null)
+          subHardware.Add(energyMeters);
+      }
+
+      superIOHardware = subHardware.ToArray();
     }
 
     public string Name {

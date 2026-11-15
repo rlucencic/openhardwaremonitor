@@ -21,7 +21,12 @@ namespace OpenHardwareMonitor.Hardware {
     GpuAti,    
     TBalancer,
     Heatmaster,
-    HDD
+    HDD,
+    // added in the .NET 11 / ARM64 fork; new values only go at the end
+    Gpu,          // a GPU read through Windows' counters, without a vendor library
+    Battery,
+    ThermalZones, // the ACPI thermal zones Windows reports
+    EnergyMeters  // the power meters Windows reports (Snapdragon platforms)
   }
 
   public interface IHardware : IElement {

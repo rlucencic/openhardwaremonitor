@@ -27,7 +27,7 @@ namespace OpenHardwareMonitor.GUI {
     private byte opacity = 255;
     private Point location = new Point(100, 100);
     private Size size = new Size(130, 84);
-    private ContextMenu contextMenu = null;
+    private ContextMenuStrip contextMenu = null;
     private MethodInfo commandDispatch;
     private IntPtr handleBitmapDC;
     private Size bufferSize;
@@ -75,9 +75,8 @@ namespace OpenHardwareMonitor.GUI {
     }
 
     private void ShowContextMenu(Point position) {
-      NativeMethods.TrackPopupMenuEx(contextMenu.Handle, 
-        TPM_RIGHTBUTTON | TPM_VERTICAL, position.X,
-        position.Y, Handle, IntPtr.Zero);
+      // position is in screen coordinates (from WM_NCRBUTTONUP)
+      contextMenu.Show(position);
     }
 
     protected virtual CreateParams CreateParams {
@@ -366,7 +365,7 @@ namespace OpenHardwareMonitor.GUI {
 
     public event EventHandler LocationChanged;
 
-    public ContextMenu ContextMenu {
+    public ContextMenuStrip ContextMenu {
       get {
         return contextMenu;
       }

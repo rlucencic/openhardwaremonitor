@@ -77,13 +77,14 @@ namespace OpenHardwareMonitor.Utilities {
       if (PlatformNotSupported)
         return false;
 
+      // Stopping the listener completes the pending BeginGetContext, so the
+      // request thread sees IsListening turn false and ends by itself.
       try {
-        listenerThread.Abort();
         listener.Stop();
+        if (listenerThread != null)
+          listenerThread.Join(1000);
         listenerThread = null;
       } catch (HttpListenerException) {
-      } catch (ThreadAbortException) {
-      } catch (NullReferenceException) {
       } catch (Exception) {
       }
       return true;
@@ -92,8 +93,17 @@ namespace OpenHardwareMonitor.Utilities {
     private void HandleRequests() {
 
       while (listener.IsListening) {
-        var context = listener.BeginGetContext(
-          new AsyncCallback(ListenerCallback), listener);
+        IAsyncResult context;
+        try {
+          context = listener.BeginGetContext(
+            new AsyncCallback(ListenerCallback), listener);
+        } catch (HttpListenerException) {
+          return;
+        } catch (ObjectDisposedException) {
+          return;
+        } catch (InvalidOperationException) {
+          return;
+        }
         context.AsyncWaitHandle.WaitOne();
       }
     }
@@ -332,6 +342,13 @@ namespace OpenHardwareMonitor.Utilities {
           return "bigng.png";
         case HardwareType.RAM:
           return "ram.png";
+        case HardwareType.Gpu:
+          return "chip.png";
+        case HardwareType.Battery:
+        case HardwareType.EnergyMeters:
+          return "power.png";
+        case HardwareType.ThermalZones:
+          return "temperature.png";
         default:
           return "cpu.png";
       }

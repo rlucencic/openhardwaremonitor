@@ -59,6 +59,16 @@ namespace OpenHardwareMonitor.GUI {
           case HardwareType.RAM:
             image = Utilities.EmbeddedResources.GetImage("ram.png");
             break;
+          case HardwareType.Gpu:
+            image = Utilities.EmbeddedResources.GetImage("chip.png");
+            break;
+          case HardwareType.Battery:
+          case HardwareType.EnergyMeters:
+            image = Utilities.EmbeddedResources.GetImage("power.png");
+            break;
+          case HardwareType.ThermalZones:
+            image = Utilities.EmbeddedResources.GetImage("temperature.png");
+            break;
           default:
             image = new Bitmap(1, 1);
             break;

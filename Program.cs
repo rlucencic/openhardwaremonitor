@@ -31,9 +31,11 @@ namespace OpenHardwareMonitor {
           new UnhandledExceptionEventHandler(CurrentDomain_UnhandledException);
       #endif
 
-      if (!AllRequiredFilesAvailable() || !IsNetFramework45Installed())
+      if (!AllRequiredFilesAvailable())
         Environment.Exit(0);
 
+      // system DPI awareness, as the manifest's dpiAware setting gave before
+      Application.SetHighDpiMode(HighDpiMode.SystemAware);
       Application.EnableVisualStyles();
       Application.SetCompatibleTextRenderingDefault(false);
       using (GUI.MainForm form = new GUI.MainForm()) {
@@ -68,26 +70,6 @@ namespace OpenHardwareMonitor {
         return false;
       
       return true;
-    }
-
-    private static bool IsNetFramework45Installed() {
-      Type type;      
-      try {
-        type = TryGetDefaultDllImportSearchPathsAttributeType();
-      } catch (TypeLoadException) {
-        MessageBox.Show(
-          "This application requires the .NET Framework 4.5 or a later version.\n" +
-          "Please install the latest .NET Framework. For more information, see\n\n" +
-          "https://dotnet.microsoft.com/download/dotnet-framework",
-          "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-        return false;
-      }
-      return type != null;
-    }
-
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private static Type TryGetDefaultDllImportSearchPathsAttributeType() {
-      return typeof(DefaultDllImportSearchPathsAttribute);
     }
 
     private static void ReportException(Exception e) {

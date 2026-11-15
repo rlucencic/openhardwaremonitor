@@ -225,20 +225,6 @@ namespace OpenHardwareMonitor.GUI {
       }
     }
 
-    public ContextMenu ContextMenu {
-      get {
-        if (genericNotifyIcon != null)
-          return genericNotifyIcon.ContextMenu;
-        else
-          return windowsNotifyIcon.ContextMenu;
-      }
-      set {
-        if (genericNotifyIcon != null)
-          genericNotifyIcon.ContextMenu = value;
-        else
-          windowsNotifyIcon.ContextMenu = value;
-      }
-    }
 
     public ContextMenuStrip ContextMenuStrip {
       get {
@@ -333,7 +319,6 @@ namespace OpenHardwareMonitor.GUI {
       private NotifyIconNativeWindow window;
       private bool doubleClickDown;
       private bool visible;
-      private MethodInfo commandDispatch;
 
       public event EventHandler BalloonTipClicked;
       public event EventHandler BalloonTipClosed;
@@ -349,7 +334,6 @@ namespace OpenHardwareMonitor.GUI {
       public string BalloonTipText { get; set; }
       public ToolTipIcon BalloonTipIcon { get; set; }
       public string BalloonTipTitle { get; set; }
-      public ContextMenu ContextMenu { get; set; }
       public ContextMenuStrip ContextMenuStrip { get; set; }
       public object Tag { get; set; }
 
@@ -401,10 +385,6 @@ namespace OpenHardwareMonitor.GUI {
         BalloonTipText = "";
         BalloonTipTitle = "";
 
-        commandDispatch = typeof(Form).Assembly.
-          GetType("System.Windows.Forms.Command").GetMethod("DispatchID",
-          BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public,
-          null, new Type[] { typeof(int) }, null);
 
         id = ++NotifyIconWindowsImplementation.nextId;
         window = new NotifyIconNativeWindow(this);
@@ -419,7 +399,6 @@ namespace OpenHardwareMonitor.GUI {
             UpdateNotifyIcon(false);
             window.DestroyHandle();
             window = null;
-            ContextMenu = null;
             ContextMenuStrip = null;
           }
         } else {
@@ -465,7 +444,7 @@ namespace OpenHardwareMonitor.GUI {
       }
 
       private void ShowContextMenu() {
-        if (ContextMenu == null && ContextMenuStrip == null)
+        if (ContextMenuStrip == null)
           return;
 
         NativeMethods.Point p = new NativeMethods.Point();
@@ -473,27 +452,16 @@ namespace OpenHardwareMonitor.GUI {
         NativeMethods.SetForegroundWindow(
           new HandleRef(window, window.Handle));
 
-        if (ContextMenu != null) {
-          ContextMenu.GetType().InvokeMember("OnPopup",
-            BindingFlags.NonPublic | BindingFlags.InvokeMethod |
-            BindingFlags.Instance, null, ContextMenu,
-            new Object[] { System.EventArgs.Empty });
-
-          NativeMethods.TrackPopupMenuEx(
-            new HandleRef(ContextMenu, ContextMenu.Handle), 72,
-            p.x, p.y, new HandleRef(window, window.Handle),
-            IntPtr.Zero);
-
-          NativeMethods.PostMessage(
-            new HandleRef(window, window.Handle), WM_NULL, 0, 0);
-          return;
-        }
-
-        if (ContextMenuStrip != null)
-          ContextMenuStrip.GetType().InvokeMember("ShowInTaskbar",
-            BindingFlags.NonPublic | BindingFlags.InvokeMethod |
-            BindingFlags.Instance, null, ContextMenuStrip,
-            new Object[] { p.x, p.y });
+        // ShowInTaskbar is what WinForms' own NotifyIcon uses: it places the
+        // menu next to the taskbar. Fall back to the public Show if a future
+        // WinForms drops the internal method.
+        MethodInfo showInTaskbar = typeof(ContextMenuStrip).GetMethod(
+          "ShowInTaskbar", BindingFlags.NonPublic | BindingFlags.Instance,
+          null, new Type[] { typeof(int), typeof(int) }, null);
+        if (showInTaskbar != null)
+          showInTaskbar.Invoke(ContextMenuStrip, new object[] { p.x, p.y });
+        else
+          ContextMenuStrip.Show(p.x, p.y);
       }
 
       private void UpdateNotifyIcon(bool showNotifyIcon) {
@@ -587,32 +555,11 @@ namespace OpenHardwareMonitor.GUI {
         doubleClickDown = false;
       }
 
-      private void ProcessInitMenuPopup(ref Message message) {
-        if (ContextMenu != null &&
-          (bool)ContextMenu.GetType().InvokeMember("ProcessInitMenuPopup",
-            BindingFlags.NonPublic | BindingFlags.InvokeMethod |
-            BindingFlags.Instance, null, ContextMenu,
-            new Object[] { message.WParam })) {
-          return;
-        }
-        window.DefWndProc(ref message);
-      }
 
       private void WndProc(ref Message message) {
         switch (message.Msg) {
           case WM_DESTROY:
             UpdateNotifyIcon(false);
-            return;
-          case WM_COMMAND:
-            if (message.LParam != IntPtr.Zero) {
-              window.DefWndProc(ref message);
-              return;
-            }
-            commandDispatch.Invoke(null, new object[] { 
-            message.WParam.ToInt32() & 0xFFFF });
-            return;
-          case WM_INITMENUPOPUP:
-            ProcessInitMenuPopup(ref message);
             return;
           case WM_TRAYMOUSEMESSAGE:
             switch ((int)message.LParam) {
@@ -634,7 +581,7 @@ namespace OpenHardwareMonitor.GUI {
                 ProcessMouseDown(ref message, MouseButtons.Right, false);
                 return;
               case WM_RBUTTONUP:
-                if (ContextMenu != null || ContextMenuStrip != null)
+                if (ContextMenuStrip != null)
                   ShowContextMenu();
                 ProcessMouseUp(ref message, MouseButtons.Right);
                 return;

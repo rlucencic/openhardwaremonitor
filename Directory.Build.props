@@ -1,5 +1,27 @@
 <Project>
- <PropertyGroup>
-   <LangVersion>7.3</LangVersion>
- </PropertyGroup>
+  <PropertyGroup>
+    <!-- OpenHardwareMonitor.csproj and OpenHardwareMonitorLib.csproj share the
+         repository root, so each project needs its own obj folder for restore. -->
+    <BaseIntermediateOutputPath>obj\$(MSBuildProjectName)\</BaseIntermediateOutputPath>
+    <EnableDefaultItems>false</EnableDefaultItems>
+    <!-- The projects keep their own AssemblyInfo files. The SDK still generates
+         the rest, such as SupportedOSPlatform("windows"), which tells the
+         platform analyzer (CA1416) these assemblies only run on Windows. -->
+    <GenerateAssemblyTitleAttribute>false</GenerateAssemblyTitleAttribute>
+    <GenerateAssemblyDescriptionAttribute>false</GenerateAssemblyDescriptionAttribute>
+    <GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
+    <GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
+    <GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
+    <GenerateAssemblyCopyrightAttribute>false</GenerateAssemblyCopyrightAttribute>
+    <GenerateAssemblyVersionAttribute>false</GenerateAssemblyVersionAttribute>
+    <GenerateAssemblyFileVersionAttribute>false</GenerateAssemblyFileVersionAttribute>
+    <GenerateAssemblyInformationalVersionAttribute>false</GenerateAssemblyInformationalVersionAttribute>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- WFO1000: control properties without designer serialization settings.
+         The controls predate the analyzer and the forms' designer code is
+         already generated, so it changes nothing at run time. -->
+    <NoWarn>$(NoWarn);WFO1000</NoWarn>
+  </PropertyGroup>
 </Project>

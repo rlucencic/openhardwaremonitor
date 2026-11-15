@@ -20,16 +20,22 @@ namespace OpenHardwareMonitor.Hardware.HDD {
 
     private const int MAX_DRIVES = 32;
 
-    private readonly List<AbstractHarddrive> hardware = 
-      new List<AbstractHarddrive>();
+    private readonly List<Hardware> hardware = new List<Hardware>();
 
     public HarddriveGroup(ISettings settings) {
-      if (OperatingSystem.IsUnix) 
+      if (OperatingSystem.IsUnix)
         return;
 
       ISmart smart = new WindowsSmart();
 
       for (int drive = 0; drive < MAX_DRIVES; drive++) {
+        // NVMe drives don't answer ATA SMART; read their health log instead
+        NVMeDrive nvme = NVMeDrive.Create(drive, smart, settings);
+        if (nvme != null) {
+          this.hardware.Add(nvme);
+          continue;
+        }
+
         AbstractHarddrive instance =
           AbstractHarddrive.CreateInstance(smart, drive, settings);
         if (instance != null) {
@@ -49,7 +55,7 @@ namespace OpenHardwareMonitor.Hardware.HDD {
     }
 
     public void Close() {
-      foreach (AbstractHarddrive hdd in hardware) 
+      foreach (Hardware hdd in hardware)
         hdd.Close();
     }
   }

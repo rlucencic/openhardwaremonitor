@@ -12,7 +12,6 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
-using System.Security.Permissions;
 using System.Reflection;
 
 namespace OpenHardwareMonitor.Hardware {
@@ -31,7 +30,8 @@ namespace OpenHardwareMonitor.Hardware {
     private bool ramEnabled;
     private bool gpuEnabled;
     private bool fanControllerEnabled;
-    private bool hddEnabled;    
+    private bool hddEnabled;
+    private bool batteryEnabled;
 
     public Computer() {
       this.settings = new Settings();
@@ -74,15 +74,18 @@ namespace OpenHardwareMonitor.Hardware {
         Remove(group);
     }
 
-    [SecurityPermission(SecurityAction.LinkDemand, UnmanagedCode = true)]
     public void Open() {
       if (open)
         return;
 
       this.smbios = new SMBIOS();
 
-      Ring0.Open();
-      Opcode.Open();
+      // The kernel driver and the CPUID code are x86 only. On ARM64 the
+      // driver can't load, and the CPUID code would crash a native process.
+      if (!OperatingSystem.IsArm64) {
+        Ring0.Open();
+        Opcode.Open();
+      }
 
       AddGroups();
 
@@ -94,15 +97,13 @@ namespace OpenHardwareMonitor.Hardware {
         Add(new Mainboard.MainboardGroup(smbios, settings));
 
       if (cpuEnabled)
-        Add(new CPU.CPUGroup(settings));
+        AddCpuGroup();
 
       if (ramEnabled)
         Add(new RAM.RAMGroup(smbios, settings));
 
-      if (gpuEnabled) {
-        Add(new ATI.ATIGroup(settings));
-        Add(new Nvidia.NvidiaGroup(settings));
-      }
+      if (gpuEnabled)
+        AddGpuGroups();
 
       if (fanControllerEnabled) {
         Add(new TBalancer.TBalancerGroup(settings));
@@ -111,6 +112,36 @@ namespace OpenHardwareMonitor.Hardware {
 
       if (hddEnabled)
         Add(new HDD.HarddriveGroup(settings));
+
+      if (batteryEnabled)
+        Add(new Battery.BatteryGroup(settings));
+    }
+
+    private void AddCpuGroup() {
+      if (OperatingSystem.IsArm64)
+        Add(new CPU.ArmCPUGroup(settings));
+      else
+        Add(new CPU.CPUGroup(settings));
+    }
+
+    private void RemoveCpuGroups() {
+      RemoveType<CPU.CPUGroup>();
+      RemoveType<CPU.ArmCPUGroup>();
+    }
+
+    private void AddGpuGroups() {
+      Add(new ATI.ATIGroup(settings));
+      Add(new Nvidia.NvidiaGroup(settings));
+      // GPUs without a vendor library (Qualcomm Adreno on ARM64), read
+      // through Windows' own GPU counters
+      if (OperatingSystem.IsArm64)
+        Add(new Gpu.WindowsGpuGroup(settings));
+    }
+
+    private void RemoveGpuGroups() {
+      RemoveType<ATI.ATIGroup>();
+      RemoveType<Nvidia.NvidiaGroup>();
+      RemoveType<Gpu.WindowsGpuGroup>();
     }
 
     public void Reset() {
@@ -124,7 +155,6 @@ namespace OpenHardwareMonitor.Hardware {
     public bool MainboardEnabled {
       get { return mainboardEnabled; }
 
-      [SecurityPermission(SecurityAction.LinkDemand, UnmanagedCode = true)]
       set {
         if (open && value != mainboardEnabled) {
           if (value)
@@ -139,13 +169,12 @@ namespace OpenHardwareMonitor.Hardware {
     public bool CPUEnabled {
       get { return cpuEnabled; }
 
-      [SecurityPermission(SecurityAction.LinkDemand, UnmanagedCode = true)]
       set {
         if (open && value != cpuEnabled) {
           if (value)
-            Add(new CPU.CPUGroup(settings));
+            AddCpuGroup();
           else
-            RemoveType<CPU.CPUGroup>();
+            RemoveCpuGroups();
         }
         cpuEnabled = value;
       }
@@ -154,7 +183,6 @@ namespace OpenHardwareMonitor.Hardware {
     public bool RAMEnabled {
       get { return ramEnabled; }
 
-      [SecurityPermission(SecurityAction.LinkDemand, UnmanagedCode = true)]
       set {
         if (open && value != ramEnabled) {
           if (value)
@@ -169,16 +197,12 @@ namespace OpenHardwareMonitor.Hardware {
     public bool GPUEnabled {
       get { return gpuEnabled; }
 
-      [SecurityPermission(SecurityAction.LinkDemand, UnmanagedCode = true)]
       set {
         if (open && value != gpuEnabled) {
-          if (value) {
-            Add(new ATI.ATIGroup(settings));
-            Add(new Nvidia.NvidiaGroup(settings));
-          } else {
-            RemoveType<ATI.ATIGroup>();
-            RemoveType<Nvidia.NvidiaGroup>();
-          }
+          if (value)
+            AddGpuGroups();
+          else
+            RemoveGpuGroups();
         }
         gpuEnabled = value;
       }
@@ -187,7 +211,6 @@ namespace OpenHardwareMonitor.Hardware {
     public bool FanControllerEnabled {
       get { return fanControllerEnabled; }
 
-      [SecurityPermission(SecurityAction.LinkDemand, UnmanagedCode = true)]
       set {
         if (open && value != fanControllerEnabled) {
           if (value) {
@@ -205,7 +228,6 @@ namespace OpenHardwareMonitor.Hardware {
     public bool HDDEnabled {
       get { return hddEnabled; }
 
-      [SecurityPermission(SecurityAction.LinkDemand, UnmanagedCode = true)]
       set {
         if (open && value != hddEnabled) {
           if (value)
@@ -214,6 +236,20 @@ namespace OpenHardwareMonitor.Hardware {
             RemoveType<HDD.HarddriveGroup>();
         }
         hddEnabled = value;
+      }
+    }
+
+    public bool BatteryEnabled {
+      get { return batteryEnabled; }
+
+      set {
+        if (open && value != batteryEnabled) {
+          if (value)
+            Add(new Battery.BatteryGroup(settings));
+          else
+            RemoveType<Battery.BatteryGroup>();
+        }
+        batteryEnabled = value;
       }
     }
 
@@ -316,6 +352,10 @@ namespace OpenHardwareMonitor.Hardware {
         w.WriteLine(Environment.OSVersion.ToString());
         w.Write("Process Type: ");
         w.WriteLine(IntPtr.Size == 4 ? "32-Bit" : "64-Bit");
+        w.Write("Process Architecture: ");
+        w.WriteLine(OperatingSystem.ProcessArchitectureName);
+        w.Write("Windows on ARM64: ");
+        w.WriteLine(OperatingSystem.IsArm64 ? "Yes" : "No");
         w.WriteLine();
 
         string r = Ring0.GetReport();
@@ -365,8 +405,10 @@ namespace OpenHardwareMonitor.Hardware {
 
       RemoveGroups();
 
-      Opcode.Close();
-      Ring0.Close();
+      if (!OperatingSystem.IsArm64) {
+        Opcode.Close();
+        Ring0.Close();
+      }
 
       this.smbios = null;
 
