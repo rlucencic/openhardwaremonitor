@@ -22,9 +22,11 @@ Everything comes from documented Windows interfaces, with no kernel driver and n
 
 Tested on an ASUS Zenbook A14 (Snapdragon X Elite X1E-78-100), both as a native ARM64 process and as x64 under emulation.
 
+**Thermal zone names.** The firmware calls its zones TZ0, TZ1... without saying what they measure. On the Zenbook A14 (board UX3407RA), the CPU's zones are labelled from measurements: one CPU cluster at a time was loaded and the zones that warmed up were recorded. They show as, for example, "CPU Cluster #1 (TZ0)". Clusters 2 and 3 heat the same zones, so those share one label. Other models keep the plain names, since they may number their zones differently. Their table is in `Hardware/Mainboard/ThermalZones.cs`.
+
 Not there yet:
 
-- **CPU and GPU temperatures** aren't labelled: the firmware's thermal zones have no names saying what they measure, so they show under the mainboard as TZ0, TZ1...
+- **GPU temperatures** in the zones aren't labelled: the GPU couldn't be loaded to find them, because its driver wasn't loading.
 - **GPU and NPU readings haven't been seen on working hardware**: the test laptop's Adreno and Hexagon drivers weren't loading. Whether their drivers report temperature and clock through DXCore is untested. Microsoft's software adapters (Basic Render Driver) are left out.
 
 ## Other changes

@@ -37,8 +37,43 @@ namespace OpenHardwareMonitor.Hardware.Mainboard {
     private readonly bool highPrecision;
     private readonly string[] zones;
     private readonly Sensor[] sensors;
+    private readonly string model;
+    private readonly Dictionary<string, string> labels;
 
-    public static ThermalZones Create(IHardware parent, ISettings settings) {
+    // What zones measure, per mainboard (SMBIOS board product), found by
+    // loading one CPU cluster at a time and watching which zones warm up.
+    // Zones not listed keep their ACPI names. Another model can number its
+    // zones differently, so only measured models are listed.
+    private static readonly Dictionary<string, Dictionary<string, string>>
+      KnownZones = new Dictionary<string, Dictionary<string, string>>(
+        StringComparer.OrdinalIgnoreCase) {
+      // ASUS Zenbook A14, Snapdragon X Elite X1E-78-100, measured on an
+      // idle CPU with 3 on/off cycles of 12 s per cluster (each cluster's
+      // energy meter rose most when it was loaded: +4.8, +3.9, +4.8 W):
+      //  - TZ0, TZ1: +7 C for cluster 1 (cores 0-3), +2 to 3 C for the others
+      //  - TZ2 to TZ5: +6 to 8 C for clusters 2 and 3 alike, about 0 for
+      //    cluster 1; too close to tell cluster 2's zones from cluster 3's
+      //  - TZ44, TZ98, TZ99: +5 to 6 C for clusters 2 and 3, +1 to 2 C for
+      //    cluster 1; always equal to each other
+      //  - TZ6 and TZ11 rose about 2 C whichever cluster was loaded, and the
+      //    rest (THZ0, TZ31 to TZ43) didn't respond: not labelled
+      { "UX3407RA", new Dictionary<string, string>(
+          StringComparer.OrdinalIgnoreCase) {
+        { "TZ0", "CPU Cluster #1" },
+        { "TZ1", "CPU Cluster #1" },
+        { "TZ2", "CPU Clusters #2-3" },
+        { "TZ3", "CPU Clusters #2-3" },
+        { "TZ4", "CPU Clusters #2-3" },
+        { "TZ5", "CPU Clusters #2-3" },
+        { "TZ44", "CPU" },
+        { "TZ98", "CPU" },
+        { "TZ99", "CPU" }
+      } }
+    };
+
+    public static ThermalZones Create(IHardware parent, string model,
+      ISettings settings)
+    {
       PdhQuery query = new PdhQuery();
       bool highPrecision = true;
       PdhCounter counter = query.AddCounter(HighPrecisionPath);
@@ -55,12 +90,13 @@ namespace OpenHardwareMonitor.Hardware.Mainboard {
         query.Dispose();
         return null;
       }
-      return new ThermalZones(parent, query, counter, highPrecision, zones,
-        settings);
+      return new ThermalZones(parent, model, query, counter, highPrecision,
+        zones, settings);
     }
 
-    private ThermalZones(IHardware parent, PdhQuery query, PdhCounter counter,
-      bool highPrecision, List<string> zones, ISettings settings)
+    private ThermalZones(IHardware parent, string model, PdhQuery query,
+      PdhCounter counter, bool highPrecision, List<string> zones,
+      ISettings settings)
       : base("ACPI Thermal Zones", new Identifier("acpi", "thermalzones"),
         settings)
     {
@@ -68,6 +104,9 @@ namespace OpenHardwareMonitor.Hardware.Mainboard {
       this.query = query;
       this.counter = counter;
       this.highPrecision = highPrecision;
+      this.model = model;
+      if (model == null || !KnownZones.TryGetValue(model, out labels))
+        labels = null;
 
       // natural order (TZ2 before TZ10), which also fixes the indices
       zones.Sort(CompareZones);
@@ -87,6 +126,10 @@ namespace OpenHardwareMonitor.Hardware.Mainboard {
         // keep the ACPI scope when the short name isn't unique
         string sensorName = shortNames[s] > 1 ?
           this.zones[i].TrimStart('\\').ToUpperInvariant() : s;
+        // a known zone shows what it measures, keeping its ACPI name
+        string label;
+        if (labels != null && labels.TryGetValue(s, out label))
+          sensorName = label + " (" + sensorName + ")";
         sensors[i] = new Sensor(sensorName, i, SensorType.Temperature, this,
           settings);
       }
@@ -148,6 +191,8 @@ namespace OpenHardwareMonitor.Hardware.Mainboard {
       r.AppendLine("ACPI Thermal Zones");
       r.AppendLine();
       r.AppendLine("Counter: " + (highPrecision ? HighPrecisionPath : Path));
+      r.AppendLine("Model: " + (model ?? "unknown") + (labels != null ?
+        " (zone names measured)" : " (zone names not known)"));
       foreach (string zone in zones)
         r.AppendLine(" " + zone);
       r.AppendLine();

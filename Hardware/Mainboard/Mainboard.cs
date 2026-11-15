@@ -67,7 +67,8 @@ namespace OpenHardwareMonitor.Hardware.Mainboard {
       // Without a Super I/O chip (laptops, and always on ARM64), Windows'
       // ACPI thermal zones are the mainboard's temperatures.
       if (superIO.Length == 0 && !OperatingSystem.IsUnix) {
-        ThermalZones thermalZones = ThermalZones.Create(this, settings);
+        ThermalZones thermalZones = ThermalZones.Create(this,
+          smbios.Board != null ? smbios.Board.ProductName : null, settings);
         if (thermalZones != null)
           subHardware.Add(thermalZones);
       }
