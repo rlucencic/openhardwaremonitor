@@ -343,6 +343,7 @@ namespace OpenHardwareMonitor.Utilities {
         case HardwareType.RAM:
           return "ram.png";
         case HardwareType.Gpu:
+        case HardwareType.Npu:
           return "chip.png";
         case HardwareType.Battery:
         case HardwareType.EnergyMeters:

@@ -60,6 +60,7 @@ namespace OpenHardwareMonitor.GUI {
             image = Utilities.EmbeddedResources.GetImage("ram.png");
             break;
           case HardwareType.Gpu:
+          case HardwareType.Npu:
             image = Utilities.EmbeddedResources.GetImage("chip.png");
             break;
           case HardwareType.Battery:

@@ -24,7 +24,8 @@ namespace OpenHardwareMonitor.Hardware.Mainboard {
     private const string PowerPath = @"\Energy Meter(*)\Power"; // milliwatts
     private const string EnergyPath = @"\Energy Meter(*)\Energy";
 
-    private static readonly string[] ShownElsewhere = { "cpu_cluster", "gpu" };
+    private static readonly string[] ShownElsewhere =
+      { "cpu_cluster", "gpu", "npu", "nsp" };
 
     private static readonly Dictionary<string, string> Names =
       new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {

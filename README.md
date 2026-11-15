@@ -14,7 +14,8 @@ Everything comes from documented Windows interfaces, with no kernel driver and n
 |---|---|---|
 | CPU | load and clock per core, power per cluster (Snapdragon) | Processor Information and Energy Meter counters |
 | Mainboard | ACPI thermal zones (TZ0, TZ1...), system and USB-C power (Snapdragon) | Thermal Zone Information and Energy Meter counters |
-| GPU (e.g. Adreno) | load per engine type, shared memory, power (Snapdragon) | GPU Engine, GPU Adapter Memory and Energy Meter counters, DXGI for names |
+| GPU (e.g. Adreno) | load per engine type, shared memory, power (Snapdragon), and temperature and clock where the driver reports them | GPU Engine, GPU Adapter Memory and Energy Meter counters, DXGI for names, DXCore adapter state for temperature and clock |
+| NPU (e.g. Hexagon) | load, shared memory, and temperature, clock and power where reported | the same counters as GPUs, DXCore to find NPUs |
 | NVMe drive | temperatures, remaining life, available spare, data read and written | NVMe health log (`IOCTL_STORAGE_QUERY_PROPERTY`) |
 | Battery | charge, wear, voltage, charge or discharge rate, temperature | battery IOCTLs |
 | RAM | as before | |
@@ -24,8 +25,7 @@ Tested on an ASUS Zenbook A14 (Snapdragon X Elite X1E-78-100), both as a native 
 Not there yet:
 
 - **CPU and GPU temperatures** aren't labelled: the firmware's thermal zones have no names saying what they measure, so they show under the mainboard as TZ0, TZ1...
-- **GPU clock and temperature** aren't read. Windows' GPU performance query (D3DKMT) may have them, but it couldn't be tried on a working Adreno here.
-- **The GPU readings haven't been seen on a working Adreno**: the test laptop's GPU driver wasn't loading. Microsoft's software adapters (Basic Render Driver) are left out.
+- **GPU and NPU readings haven't been seen on working hardware**: the test laptop's Adreno and Hexagon drivers weren't loading. Whether their drivers report temperature and clock through DXCore is untested. Microsoft's software adapters (Basic Render Driver) are left out.
 
 ## Other changes
 

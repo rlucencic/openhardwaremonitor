@@ -26,7 +26,8 @@ namespace OpenHardwareMonitor.Hardware {
     Gpu,          // a GPU read through Windows' counters, without a vendor library
     Battery,
     ThermalZones, // the ACPI thermal zones Windows reports
-    EnergyMeters  // the power meters Windows reports (Snapdragon platforms)
+    EnergyMeters, // the power meters Windows reports (Snapdragon platforms)
+    Npu           // a neural processing unit, read through Windows' counters
   }
 
   public interface IHardware : IElement {

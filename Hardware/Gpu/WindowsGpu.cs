@@ -17,9 +17,10 @@ namespace OpenHardwareMonitor.Hardware.Gpu {
 
   /// <summary>
   /// GPUs without a vendor library, such as Qualcomm's Adreno on Windows on
-  /// ARM64, read through what Windows itself reports: engine load from the
-  /// GPU Engine counters, memory from the GPU Adapter Memory counters, and
-  /// on Snapdragon the GPU's power from the energy meters.
+  /// ARM64, and NPUs such as the Hexagon, read through what Windows itself
+  /// reports: engine load from the GPU Engine counters, memory from the GPU
+  /// Adapter Memory counters, temperature and clock from DXCore where the
+  /// driver reports them, and on Snapdragon power from the energy meters.
   /// </summary>
   internal class WindowsGpuGroup : IGroup {
 
@@ -58,8 +59,50 @@ namespace OpenHardwareMonitor.Hardware.Gpu {
         // DXGI lists an adapter once per output; keep one
         if (!seen.Add(adapter.LuidString))
           continue;
-        hardware.Add(new WindowsGpu(adapter, index++, settings));
+        hardware.Add(new WindowsGpu(adapter, index++, false, settings));
       }
+
+      // NPUs are compute-only adapters, which DXGI doesn't list; DXCore does
+      report.AppendLine("Windows NPUs (DXCore)");
+      report.AppendLine();
+      int npuIndex = 0;
+      foreach (DxCoreAdapter npu in GetNpus()) {
+        Dxgi.Adapter info = new Dxgi.Adapter {
+          Description = npu.Description, VendorId = npu.VendorId,
+          DeviceId = npu.DeviceId, LuidLow = npu.LuidLow,
+          LuidHigh = npu.LuidHigh, DedicatedVideoMemory = npu.DedicatedMemory,
+          Software = !npu.IsHardware
+        };
+        npu.Dispose();
+        report.AppendLine(string.Format(CultureInfo.InvariantCulture,
+          " {0} vendor 0x{1:X4} device 0x{2:X4} luid {3} {4}",
+          info.Description, info.VendorId, info.DeviceId, info.LuidString,
+          info.IsSoftware ? "(software)" : ""));
+        if (info.IsSoftware && !IncludeSoftwareAdapters)
+          continue;
+        if (!seen.Add(info.LuidString))
+          continue;
+        hardware.Add(new WindowsGpu(info, npuIndex++, true, settings));
+      }
+      report.AppendLine();
+    }
+
+    private static List<DxCoreAdapter> GetNpus() {
+      List<DxCoreAdapter> npus = DxCore.GetAdapters(DxCore.HardwareTypeNpu);
+      if (npus.Count > 0)
+        return npus;
+      // Windows without the NPU hardware type: machine learning adapters
+      // that can't do graphics
+      foreach (DxCoreAdapter adapter in
+        DxCore.GetAdapters(DxCore.AttributeGenericML))
+      {
+        if (adapter.IsAttributeSupported(DxCore.AttributeD3D12Graphics) ||
+          adapter.IsAttributeSupported(DxCore.AttributeD3D11Graphics))
+          adapter.Dispose();
+        else
+          npus.Add(adapter);
+      }
+      return npus;
     }
 
     public IHardware[] Hardware {
@@ -101,47 +144,81 @@ namespace OpenHardwareMonitor.Hardware.Gpu {
     };
 
     private readonly Dxgi.Adapter adapter;
+    private readonly bool npu;
+    private readonly string prefix; // "GPU" or "NPU"
     private readonly PdhQuery query;
     private readonly PdhCounter engineCounter;
     private readonly PdhCounter sharedMemoryCounter;
     private readonly PdhCounter dedicatedMemoryCounter;
     private readonly PdhCounter powerCounter;
+    private DxCoreAdapter dxcore;
+    private uint coreEngine; // the engine whose clock shows: a GPU's 3D engine
 
     private readonly Sensor[] engineLoads;
     private readonly Sensor sharedMemory;
     private readonly Sensor dedicatedMemory;
     private readonly Sensor power;
+    private readonly Sensor temperature;
+    private readonly Sensor clock;
 
-    public WindowsGpu(Dxgi.Adapter adapter, int index, ISettings settings)
-      : base(adapter.Description, new Identifier("gpu",
+    public WindowsGpu(Dxgi.Adapter adapter, int index, bool npu,
+      ISettings settings)
+      : base(adapter.Description, new Identifier(npu ? "npu" : "gpu",
         index.ToString(CultureInfo.InvariantCulture)), settings)
     {
       this.adapter = adapter;
+      this.npu = npu;
+      this.prefix = npu ? "NPU" : "GPU";
 
       query = new PdhQuery();
       engineCounter = query.AddCounter(EnginePath);
       sharedMemoryCounter = query.AddCounter(SharedMemoryPath);
       dedicatedMemoryCounter = query.AddCounter(DedicatedMemoryPath);
       // the Snapdragon energy meter has one GPU channel, so it can only be
-      // told apart when there is a single GPU
+      // told apart when there is a single GPU (and likewise NPU)
       if (index == 0)
         powerCounter = query.AddCounter(PowerPath);
       query.Collect();
 
-      engineLoads = new Sensor[Engines.Length];
-      for (int i = 0; i < Engines.Length; i++)
-        engineLoads[i] = new Sensor(Engines[i][1], i, SensorType.Load, this,
-          settings);
+      // temperature and engine clocks, where Windows and the driver have them
+      try {
+        dxcore = DxCore.GetAdapterByLuid(adapter.LuidLow, adapter.LuidHigh);
+      } catch (Exception) {
+        dxcore = null;
+      }
 
-      sharedMemory = new Sensor("GPU Shared Memory Used", 0,
+      if (npu) {
+        // an NPU's engines aren't of the GPU types: show the busiest
+        engineLoads = new[] {
+          new Sensor("NPU", 0, SensorType.Load, this, settings) };
+      } else {
+        engineLoads = new Sensor[Engines.Length];
+        for (int i = 0; i < Engines.Length; i++)
+          engineLoads[i] = new Sensor(Engines[i][1], i, SensorType.Load, this,
+            settings);
+      }
+
+      sharedMemory = new Sensor(prefix + " Shared Memory Used", 0,
         SensorType.SmallData, this, settings);
-      dedicatedMemory = new Sensor("GPU Dedicated Memory Used", 1,
+      dedicatedMemory = new Sensor(prefix + " Dedicated Memory Used", 1,
         SensorType.SmallData, this, settings);
-      power = new Sensor("GPU Power", 0, SensorType.Power, this, settings);
+      power = new Sensor(prefix + " Power", 0, SensorType.Power, this,
+        settings);
+      temperature = new Sensor(npu ? "NPU" : "GPU Core", 0,
+        SensorType.Temperature, this, settings);
+      clock = new Sensor(npu ? "NPU" : "GPU Core", 0, SensorType.Clock, this,
+        settings);
     }
 
     public override HardwareType HardwareType {
-      get { return HardwareType.Gpu; }
+      get { return npu ? HardwareType.Npu : HardwareType.Gpu; }
+    }
+
+    private bool IsPowerChannel(string channel) {
+      if (npu)
+        return channel.IndexOf("npu", StringComparison.OrdinalIgnoreCase) >= 0
+          || channel.IndexOf("nsp", StringComparison.OrdinalIgnoreCase) >= 0;
+      return string.Equals(channel, "gpu", StringComparison.OrdinalIgnoreCase);
     }
 
     private bool IsThisAdapter(string luid) {
@@ -169,12 +246,22 @@ namespace OpenHardwareMonitor.Hardware.Gpu {
           perEngine.TryGetValue(engine, out sum);
           perEngine[engine] = sum + v.Value;
           engineType[engine] = m.Groups[4].Value;
+
+          // the clock shown is the 3D engine's (the first one on the first
+          // physical adapter); an NPU's is its first engine's
+          uint engineIndex;
+          if (!npu && m.Groups[2].Value == "0" && string.Equals(
+            m.Groups[4].Value, "3D", StringComparison.OrdinalIgnoreCase) &&
+            uint.TryParse(m.Groups[3].Value, NumberStyles.None,
+            CultureInfo.InvariantCulture, out engineIndex) &&
+            (coreEngine == 0 || engineIndex < coreEngine))
+            coreEngine = engineIndex;
         }
 
-        for (int i = 0; i < Engines.Length; i++) {
+        for (int i = 0; i < engineLoads.Length; i++) {
           double max = -1;
           foreach (KeyValuePair<string, double> e in perEngine) {
-            if (string.Equals(engineType[e.Key], Engines[i][0],
+            if (npu || string.Equals(engineType[e.Key], Engines[i][0],
               StringComparison.OrdinalIgnoreCase))
               max = Math.Max(max, e.Value);
           }
@@ -193,10 +280,31 @@ namespace OpenHardwareMonitor.Hardware.Gpu {
       UpdateMemory(dedicatedMemoryCounter, dedicatedMemory);
 
       if (powerCounter != null) {
-        double milliwatts;
-        if (powerCounter.GetValues().TryGetValue("gpu", out milliwatts)) {
-          power.Value = (float)(milliwatts / 1000);
-          ActivateSensor(power);
+        foreach (KeyValuePair<string, double> v in powerCounter.GetValues()) {
+          if (IsPowerChannel(v.Key)) {
+            power.Value = (float)(v.Value / 1000); // milliwatts
+            ActivateSensor(power);
+            break;
+          }
+        }
+      }
+
+      if (dxcore != null) {
+        try {
+          float? celsius = dxcore.GetTemperature();
+          if (celsius.HasValue) {
+            temperature.Value = celsius;
+            ActivateSensor(temperature);
+          }
+          float? megahertz = dxcore.GetEngineFrequency(coreEngine);
+          if (megahertz.HasValue) {
+            clock.Value = megahertz;
+            ActivateSensor(clock);
+          }
+        } catch (Exception) {
+          // a driver that misreports shouldn't stop the other readings
+          dxcore.Dispose();
+          dxcore = null;
         }
       }
     }
@@ -225,9 +333,14 @@ namespace OpenHardwareMonitor.Hardware.Gpu {
 
     public override string GetReport() {
       StringBuilder r = new StringBuilder();
-      r.AppendLine("Windows GPU");
+      r.AppendLine(npu ? "Windows NPU" : "Windows GPU");
       r.AppendLine();
       r.AppendLine("Name: " + adapter.Description);
+      r.AppendLine("DXCore: " + (dxcore == null ? "not available" :
+        string.Format(CultureInfo.InvariantCulture,
+        "{0} engines, temperature {1}, engine clocks {2}", dxcore.EngineCount,
+        dxcore.SupportsTemperature ? "reported" : "not reported",
+        dxcore.SupportsEngineFrequency ? "reported" : "not reported")));
       r.AppendLine(string.Format(CultureInfo.InvariantCulture,
         "Vendor: 0x{0:X4}, Device: 0x{1:X4}, LUID: {2}", adapter.VendorId,
         adapter.DeviceId, adapter.LuidString));
@@ -241,6 +354,10 @@ namespace OpenHardwareMonitor.Hardware.Gpu {
 
     public override void Close() {
       query.Dispose();
+      if (dxcore != null) {
+        dxcore.Dispose();
+        dxcore = null;
+      }
       base.Close();
     }
   }

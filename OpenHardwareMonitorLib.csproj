@@ -54,6 +54,7 @@
     <Compile Include="Hardware\Mainboard\ThermalZones.cs" />
     <Compile Include="Hardware\Mainboard\EnergyMeters.cs" />
     <Compile Include="Hardware\Gpu\WindowsGpu.cs" />
+    <Compile Include="Hardware\Gpu\DxCore.cs" />
     <Compile Include="Hardware\Battery\Battery.cs" />
     <Compile Include="Hardware\HDD\NVMeDrive.cs" />
     <Compile Include="Hardware\OperatingSystem.cs" />
