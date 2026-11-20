@@ -22,20 +22,18 @@ Everything comes from documented Windows interfaces, with no kernel driver and n
 
 Tested on an ASUS Zenbook A14 (Snapdragon X Elite X1E-78-100), both as a native ARM64 process and as x64 under emulation.
 
+**The Adreno X1-85 GPU** on that laptop (driver 31.0.178.0) shows its load per engine type, shared memory, power from the energy meter's GPU channel (about 10.5 W under full load) and its clock through DXCore (300 MHz idle, 1250 MHz under load). Its driver doesn't report temperature through DXCore; the GPU's temperature is in the thermal zones instead (below). Microsoft's software adapters (Basic Render Driver) are left out, since their load is CPU load.
+
 **The Hexagon NPU** on that laptop shows its load (from its compute engine) and shared memory. Its driver doesn't report temperature or clock through DXCore, and the laptop's energy meters have no NPU channel, so those don't show.
 
-**Thermal zone names.** The firmware calls its zones TZ0, TZ1... without saying what they measure. On the Zenbook A14 (board UX3407RA), the CPU's zones are labelled from measurements: one CPU cluster at a time was loaded and the zones that warmed up were recorded. They show as, for example, "CPU Cluster #1 (TZ0)". Clusters 2 and 3 heat the same zones, so those share one label. Other models keep the plain names, since they may number their zones differently. Their table is in `Hardware/Mainboard/ThermalZones.cs`.
+**Thermal zone names.** The firmware calls its zones TZ0, TZ1... without saying what they measure. On the Zenbook A14 (board UX3407RA), the CPU's and GPU's zones are labelled from measurements: one CPU cluster at a time was loaded, then the GPU, and the zones that warmed up were recorded. They show as, for example, "CPU Cluster #1 (TZ0)" or "GPU (TZ6)". Clusters 2 and 3 heat the same zones, so those share one label. TZ44, TZ98 and TZ99 always read the hottest of the CPU and GPU zones, so they show as "SoC Hotspot". Other models keep the plain names, since they may number their zones differently. Their table is in `Hardware/Mainboard/ThermalZones.cs`.
 
 To add another model:
-1. Make sure the CPU is idle, with no builds or other heavy work running.
+1. Make sure the CPU and GPU are idle, with no builds, videos or other heavy work running.
 2. Load one cluster's cores at a time (the cores sharing an L2 cache), switching the load on and off a few times, and note which zones warm up.
 3. Check each cluster's energy meter rose most while that cluster was loaded. If not, something else was running: measure again.
-4. Add the board's SMBIOS product name and its zones to the table.
-
-Not there yet:
-
-- **The GPU readings haven't been seen on a working Adreno.** On the test laptop the Adreno's driver fails to start: a driver-update tool had replaced most of Qualcomm's chipset drivers with mismatched versions. Microsoft's software adapters (Basic Render Driver), which stand in for it, are left out. Whether the Adreno driver reports temperature and clock through DXCore is unknown.
-- **GPU temperatures** in the thermal zones aren't labelled, for the same reason: the GPU couldn't be loaded to find them.
+4. Load the GPU the same way (a web page drawing a heavy WebGL shader will do), and check the GPU's energy meter rose while the CPU clusters' didn't.
+5. Add the board's SMBIOS product name and its zones to the table.
 
 ## Other changes
 

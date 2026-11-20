@@ -41,9 +41,9 @@ namespace OpenHardwareMonitor.Hardware.Mainboard {
     private readonly Dictionary<string, string> labels;
 
     // What zones measure, per mainboard (SMBIOS board product), found by
-    // loading one CPU cluster at a time and watching which zones warm up.
-    // Zones not listed keep their ACPI names. Another model can number its
-    // zones differently, so only measured models are listed.
+    // loading one CPU cluster at a time, then the GPU, and watching which
+    // zones warm up. Zones not listed keep their ACPI names. Another model
+    // can number its zones differently, so only measured models are listed.
     private static readonly Dictionary<string, Dictionary<string, string>>
       KnownZones = new Dictionary<string, Dictionary<string, string>>(
         StringComparer.OrdinalIgnoreCase) {
@@ -56,7 +56,18 @@ namespace OpenHardwareMonitor.Hardware.Mainboard {
       //  - TZ44, TZ98, TZ99: +5 to 6 C for clusters 2 and 3, +1 to 2 C for
       //    cluster 1; always equal to each other
       //  - TZ6 and TZ11 rose about 2 C whichever cluster was loaded, and the
-      //    rest (THZ0, TZ31 to TZ43) didn't respond: not labelled
+      //    rest (THZ0, TZ31 to TZ43) didn't respond
+      // The GPU, with Adreno driver 31.0.178.0, measured with 3 on/off
+      // cycles of 25 s of WebGL load (GPU energy meter +10.5 W, the CPU
+      // clusters' unchanged):
+      //  - TZ6: +11 C within a second of the load starting, +14 C on
+      //    average, and as quick to cool
+      //  - TZ44, TZ98, TZ99 rose +10 C: they are the hottest of TZ0 to TZ6,
+      //    in every sample of two runs (TZ98 can be a sample behind), so
+      //    they follow whichever of the CPU and GPU is hottest
+      //  - TZ11, TZ35, TZ43 (+6 to 7 C) and TZ31, TZ33, TZ40 (+4 C) warmed
+      //    slowly and went on warming after the load stopped: further away,
+      //    not labelled
       { "UX3407RA", new Dictionary<string, string>(
           StringComparer.OrdinalIgnoreCase) {
         { "TZ0", "CPU Cluster #1" },
@@ -65,9 +76,10 @@ namespace OpenHardwareMonitor.Hardware.Mainboard {
         { "TZ3", "CPU Clusters #2-3" },
         { "TZ4", "CPU Clusters #2-3" },
         { "TZ5", "CPU Clusters #2-3" },
-        { "TZ44", "CPU" },
-        { "TZ98", "CPU" },
-        { "TZ99", "CPU" }
+        { "TZ6", "GPU" },
+        { "TZ44", "SoC Hotspot" },
+        { "TZ98", "SoC Hotspot" },
+        { "TZ99", "SoC Hotspot" }
       } }
     };
 
